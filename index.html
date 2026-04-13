@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Stock Returns Analyser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--bg:#060810;--surface:#0c1020;--border:#1a2540;--accent:#00e5a0;--accent2:#4d9fff;--text:#c8d8f0;--muted:#4a6080;--head:#fff;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;font-size:14px;}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:linear-gradient(rgba(0,229,160,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,.04) 1px,transparent 1px);
+      background-size:48px 48px;z-index:0;}
+    *{position:relative;z-index:1;}
+    nav{display:flex;align-items:center;justify-content:space-between;padding:0 48px;height:64px;
+      border-bottom:1px solid var(--border);background:rgba(6,8,16,.85);backdrop-filter:blur(12px);
+      position:sticky;top:0;z-index:100;}
+    .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--head);letter-spacing:.08em;}
+    .logo span{color:var(--accent);}
+    main{max-width:1100px;margin:0 auto;padding:64px 48px;}
+    h1{font-family:'Syne',sans-serif;font-size:clamp(32px,5vw,60px);font-weight:800;
+       color:var(--head);letter-spacing:-.02em;margin-bottom:12px;}
+    h1 em{font-style:normal;color:transparent;-webkit-text-stroke:1px var(--accent);}
+    .sub{color:var(--muted);margin-bottom:40px;max-width:520px;line-height:1.8;font-size:13px;}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:48px;align-items:flex-end;}
+    label{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:6px;}
+    input,select{background:var(--surface);border:1px solid var(--border);color:var(--text);
+      padding:10px 14px;font-family:'Space Mono',monospace;font-size:13px;border-radius:2px;
+      outline:none;transition:border-color .2s;}
+    input:focus,select:focus{border-color:var(--accent2);}
+    button{background:var(--accent);color:#000;font-family:'Space Mono',monospace;font-size:12px;
+      font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:11px 28px;
+      border:none;border-radius:2px;cursor:pointer;transition:all .2s;}
+    button:hover{background:#00ffb3;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,229,160,.3);}
+    button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:40px;}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px 16px;text-align:center;}
+    .card-ticker{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;}
+    .card-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--head);}
+    .card-sub{font-size:11px;margin-top:4px;}
+    .up{color:#00e5a0;} .down{color:#ff4d6d;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px;}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:24px;}
+    .panel h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--head);margin-bottom:16px;}
+    .pred-box{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:20px;text-align:center;}
+    .pred-dir{font-family:'Syne',sans-serif;font-size:36px;font-weight:800;margin-bottom:8px;}
+    .pred-conf{font-size:13px;color:var(--muted);}
+    .prob-row{display:flex;justify-content:space-between;margin-top:12px;font-size:12px;}
+    .loader{display:none;text-align:center;padding:40px;color:var(--muted);font-size:12px;}
+    .error{color:#ff4d6d;font-size:12px;padding:12px;background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.2);border-radius:4px;display:none;}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th{background:#30363d;color:var(--accent2);font-weight:700;padding:10px 12px;text-align:left;letter-spacing:.05em;}
+    td{padding:9px 12px;border-bottom:1px solid var(--border);}
+    tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+    @media(max-width:700px){.grid2{grid-template-columns:1fr;}nav{padding:0 20px;}main{padding:40px 20px;}}
+  </style>
+</head>
+<body>
+<nav>
+  <div class="logo"><span>//</span> QUANT<span>.</span>ANALYSER</div>
+</nav>
+
+<main>
+  <h1>Stock <em>Returns</em><br>Analyser</h1>
+  <p class="sub">Live market data · Random Forest next-day prediction · Powered by FastAPI</p>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div>
+      <label>Tickers (comma-separated)</label>
+      <input id="tickersInput" value="AAPL,MSFT,GOOG,AMZN,TSLA" style="width:280px"/>
+    </div>
+    <div>
+      <label>Predict direction for</label>
+      <input id="predictInput" value="AAPL" style="width:120px"/>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button id="runBtn" onclick="runAll()">⚡ Run Analysis</button>
+    </div>
+  </div>
+
+  <div class="error" id="errorBox"></div>
+  <div class="loader" id="loader">⏳ Fetching live data & running model…</div>
+
+  <!-- Stat cards -->
+  <div class="cards" id="cards"></div>
+
+  <!-- Charts + prediction -->
+  <div class="grid2">
+    <div class="panel">
+      <h3>📈 Return Distributions (30-day)</h3>
+      <canvas id="retChart" height="200"></canvas>
+    </div>
+    <div class="panel">
+      <h3>🤖 Next-Day Prediction</h3>
+      <div class="pred-box" id="predBox">Run analysis to see prediction</div>
+    </div>
+  </div>
+
+  <!-- Stats table -->
+  <div class="panel">
+    <h3>📊 Summary Statistics</h3>
+    <table id="statsTable"><thead><tr><th>Ticker</th><th>Ann. Return</th><th>Ann. Vol</th><th>Sharpe</th><th>Skewness</th><th>Kurtosis</th></tr></thead><tbody></tbody></table>
+  </div>
+</main>
+
+<script>
+// ── Replace this with your actual deployed FastAPI URL ──────────────────────
+const API = "https://stock-analyser-api.onrender.com";
+
+let retChart = null;
+
+function showError(msg){ const b=document.getElementById("errorBox"); b.textContent=msg; b.style.display="block"; }
+function hideError(){ document.getElementById("errorBox").style.display="none"; }
+function setLoading(on){ document.getElementById("loader").style.display=on?"block":"none"; document.getElementById("runBtn").disabled=on; }
+
+async function runAll(){
+  hideError();
+  setLoading(true);
+  const tickers = document.getElementById("tickersInput").value.split(",").map(t=>t.trim().toUpperCase()).filter(Boolean);
+  const pTicker = document.getElementById("predictInput").value.trim().toUpperCase();
+
+  try{
+    // 1. Stats for each ticker
+    const statsResults = await Promise.all(tickers.map(t=>fetch(`${API}/stats/${t}`).then(r=>r.json())));
+
+    // 2. Returns for chart (predict ticker)
+    const retData = await fetch(`${API}/returns/${pTicker}?days=60`).then(r=>r.json());
+
+    // 3. ML prediction
+    const pred = await fetch(`${API}/predict/${pTicker}`).then(r=>r.json());
+
+    // ── Render stat cards ──────────────────────────────────────────────────
+    const cards = document.getElementById("cards");
+    cards.innerHTML = statsResults.map(s=>`
+      <div class="card">
+        <div class="card-ticker">${s.ticker}</div>
+        <div class="card-val ${s.ann_return>0?'up':'down'}">${(s.ann_return*100).toFixed(1)}%</div>
+        <div class="card-sub ${s.sharpe>0?'up':'down'}">Sharpe ${s.sharpe.toFixed(2)}</div>
+      </div>`).join("");
+
+    // ── Render stats table ─────────────────────────────────────────────────
+    const tbody = document.querySelector("#statsTable tbody");
+    tbody.innerHTML = statsResults.map(s=>`
+      <tr>
+        <td style="color:#fff;font-weight:700">${s.ticker}</td>
+        <td class="${s.ann_return>0?'up':'down'}">${(s.ann_return*100).toFixed(2)}%</td>
+        <td>${(s.ann_volatility*100).toFixed(2)}%</td>
+        <td class="${s.sharpe>0?'up':'down'}">${s.sharpe.toFixed(3)}</td>
+        <td>${s.skewness.toFixed(3)}</td>
+        <td>${s.kurtosis.toFixed(3)}</td>
+      </tr>`).join("");
+
+    // ── Render returns chart ───────────────────────────────────────────────
+    if(retChart) retChart.destroy();
+    const ctx = document.getElementById("retChart").getContext("2d");
+    retChart = new Chart(ctx,{
+      type:"bar",
+      data:{
+        labels: retData.dates,
+        datasets:[{
+          label:`${pTicker} Daily Log Return`,
+          data: retData.values,
+          backgroundColor: retData.values.map(v=>v>=0?"rgba(0,229,160,0.7)":"rgba(255,77,109,0.7)"),
+          borderWidth:0
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{labels:{color:"#c8d8f0",font:{family:"Space Mono",size:11}}}},
+        scales:{
+          x:{ticks:{color:"#4a6080",maxTicksLimit:8,font:{size:9}},grid:{color:"#1a2540"}},
+          y:{ticks:{color:"#4a6080",font:{size:9},callback:v=>(v*100).toFixed(2)+"%"},grid:{color:"#1a2540"}}
+        }
+      }
+    });
+
+    // ── Render prediction ──────────────────────────────────────────────────
+    const isUp   = pred.prediction === "UP";
+    const color  = isUp ? "#00e5a0" : "#ff4d6d";
+    const emoji  = isUp ? "▲" : "▼";
+    document.getElementById("predBox").innerHTML = `
+      <div class="pred-dir" style="color:${color}">${emoji} ${pred.prediction}</div>
+      <div class="pred-conf">${pred.ticker} · Confidence ${(pred.confidence*100).toFixed(1)}%</div>
+      <div class="prob-row">
+        <span class="up">▲ UP: ${(pred.prob_up*100).toFixed(1)}%</span>
+        <span>Model acc: ${(pred.model_accuracy*100).toFixed(1)}%</span>
+        <span class="down">▼ DOWN: ${(pred.prob_down*100).toFixed(1)}%</span>
+      </div>
+      <div style="margin-top:14px;font-size:10px;color:#4a6080">⚠️ Educational only — not financial advice</div>`;
+
+  }catch(e){
+    showError("Error: "+e.message+". Make sure the API URL is set correctly in the HTML file.");
+  }finally{
+    setLoading(false);
+  }
+}
+
+// Auto-run on load
+runAll();
+</script>
+</body>
+</html>
